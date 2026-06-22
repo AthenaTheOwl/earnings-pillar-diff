@@ -23,33 +23,55 @@ is committed; the outcome is captured 90 days later as a separate entry.
 
 ## Status
 
-v0 scaffold; no implementation yet. Spec 0002 will implement the MSFT
-parser. Spec 0003 will generalize to the other four filers.
+v0.1 data-report repo. It includes schema validation, voice linting,
+pillar-reference checks, a Python CLI, tests, product docs, and one
+checked-in MSFT report artifact.
 
 ## How to run
 
-Will land in spec 0002. The expected shape:
-
 ```bash
 uv sync
-uv run epd fetch --ticker MSFT --quarter 2026Q4
-uv run epd diff --ticker MSFT --quarter 2026Q4
-uv run epd memo --ticker MSFT --quarter 2026Q4 --pillar-repo ../thesis-pillar-tracker
+uv run epd --help
+uv run epd validate --pillar-repo ../thesis-pillar-tracker
+uv run pytest
 ```
 
-For v0 the only working command is `uv run epd --help`.
+The CLI also exposes filing cache, JSON diff, and memo-render commands:
+
+```bash
+uv run epd fetch --ticker MSFT --quarter 2025Q4 --filing-url <edgar-url>
+uv run epd diff --ticker MSFT --quarter 2025Q4 --prior-file prior.json --current-file current.json
+uv run epd memo --ticker MSFT --quarter 2025Q4 --delta-file data/deltas/MSFT-2025Q4.json --pillars chip-cowos-2027 --action HOLD --revert-threshold "If next-quarter purchase obligations fall below USD 85,000M, change action to TRIM." --filing-url <edgar-url> --filing-date 2025-07-30 --output earnings_diff/MSFT-2025Q4.md
+```
+
+## Sample Memo
+
+See `earnings_diff/MSFT-2025Q4.md` and `reports/MSFT-2025Q4.jsonl`. The sample
+is a hand-entered report artifact used to exercise the schema, voice, and
+pillar-reference gates before parser-produced deltas land.
 
 ## Layout
 
 ```
 earnings-pillar-diff/
   earnings_diff/                # YYYY-QN memos, write-once
+  reports/                      # JSONL report artifacts
+  earnings_pillar_diff/         # CLI, data model, and scoring
   data/
     filings/                    # cached 10-Q XBRL (.gitignored)
     deltas/                     # parsed per-quarter line items
-  src/epd/                      # CLI + parser (lands in spec 0002)
+  src/epd/                      # compatibility wrapper
   specs/0001-foundation/
+  specs/0002-design/
+  schemas/
+  scripts/
+  tests/
+  PRODUCT_BRIEF.md
+  SYSTEM_MAP.md
+  STATUS.md
   docs/first-pr.md
+  docs/product-brief.md
+  docs/system-map.md
   AGENTS.md
   LICENSE
   README.md
