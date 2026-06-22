@@ -1,0 +1,29 @@
+[project]
+name = "earnings-pillar-diff"
+version = "0.1.0"
+description = "Event-driven 10-Q delta reports mapped to active thesis pillars."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+epd = "earnings_pillar_diff.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["earnings_pillar_diff"]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
