@@ -240,7 +240,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = sub.add_parser("validate", help="run repository validation gates")
     validate.add_argument("--root", default=ROOT.as_posix())
-    validate.add_argument("--pillar-repo", default="../thesis-pillar-tracker")
+    # defaults to the bundled fixture pillar repo so a bare `validate` is
+    # read-only and self-contained: no network, no sibling repo required.
+    validate.add_argument(
+        "--pillar-repo", default=(ROOT / "tests" / "fixtures" / "pillar_repo").as_posix()
+    )
     validate.set_defaults(func=command_validate)
     return parser
 
