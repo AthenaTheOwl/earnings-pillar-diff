@@ -1,4 +1,7 @@
 # Streamlit Community Cloud reads this file. The app (streamlit_app.py) reads the
-# committed reports/*.jsonl directly, so it only needs streamlit. The CLI/package
-# under earnings_pillar_diff/ has its own deps in pyproject.toml.
+# committed reports/*.jsonl directly AND drives the real diff engine
+# (earnings_pillar_diff.model.build_delta_rows) on user-edited input, so it needs
+# both streamlit and the package itself importable.
 streamlit>=1.40
+# make the earnings_pillar_diff package importable on Streamlit Cloud
+.

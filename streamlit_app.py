@@ -110,8 +110,114 @@ st.info(
 if header.get("revert_threshold"):
     st.caption(f"revert threshold: {header['revert_threshold']}")
 
+# -------------------------------------------------------------------------
+# interactive: drive the real diff engine on your own line items
+# -------------------------------------------------------------------------
+from earnings_pillar_diff.model import build_delta_rows, normalize_line_items
+
+st.divider()
+st.subheader("diff it yourself")
 st.caption(
-    "v0.1 ships one MSFT fixture report. the data model + scoring live in "
-    "`earnings_pillar_diff/`; this page reads the committed `reports/*.jsonl`. "
-    "repo: github.com/AthenaTheOwl/earnings-pillar-diff"
+    "the section above is a committed report. below, you drive the repo's real "
+    "engine: edit prior-quarter and current-quarter line-item values and "
+    "`earnings_pillar_diff.model.build_delta_rows` recomputes every delta, "
+    "percent change, and materiality flag live — the same code the `diff` CLI "
+    "verb runs. materiality uses `scoring.material_delta` (delta >= "
+    "min(5% of prior, USD 500M), or pct >= 5%)."
+)
+
+# pre-fill from the committed report so there is real data to edit.
+prefill = [
+    {
+        "tag": short_tag(r.get("tag", "")),
+        "prior (USD M)": parse_usd(r.get("prior")),
+        "current (USD M)": parse_usd(r.get("current")),
+    }
+    for r in ranked
+]
+if not prefill:
+    prefill = [{"tag": "PaymentsToAcquirePropertyPlantAndEquipment",
+                "prior (USD M)": 44477.0, "current (USD M)": 64551.0}]
+
+edited = st.data_editor(
+    prefill,
+    num_rows="dynamic",
+    use_container_width=True,
+    hide_index=True,
+    key="line_item_editor",
+    column_config={
+        "tag": st.column_config.TextColumn("line item (XBRL tag)", required=True),
+        "prior (USD M)": st.column_config.NumberColumn("prior (USD M)", format="%.1f"),
+        "current (USD M)": st.column_config.NumberColumn("current (USD M)", format="%.1f"),
+    },
+)
+
+# build the two line-item payloads the engine expects, then call it for real.
+prior_payload = [
+    {"tag": row["tag"], "value": row["prior (USD M)"]}
+    for row in edited
+    if str(row.get("tag", "")).strip() != ""
+]
+current_payload = [
+    {"tag": row["tag"], "value": row["current (USD M)"]}
+    for row in edited
+    if str(row.get("tag", "")).strip() != ""
+]
+
+if not prior_payload:
+    st.warning("add at least one line item (with a tag) to run the diff.")
+else:
+    try:
+        prior_items = normalize_line_items(prior_payload)
+        current_items = normalize_line_items(current_payload)
+        rows = build_delta_rows(prior_items, current_items)
+    except ValueError as exc:
+        st.error(f"engine rejected the input: {exc}")
+    else:
+        ranked_live = sorted(rows, key=lambda r: abs(r.delta), reverse=True)
+        material = [r for r in ranked_live if r.material]
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("line items", len(ranked_live))
+        m2.metric("material moves", len(material), help="flagged by scoring.material_delta")
+        if ranked_live:
+            big = ranked_live[0]
+            m3.metric(
+                "biggest move",
+                f"{big.delta:+,.1f}",
+                help=f"{big.tag}: {big.prior:,.1f} -> {big.current:,.1f}",
+            )
+
+        out_table = [
+            {
+                "line item": r.tag,
+                "prior": r.prior,
+                "current": r.current,
+                "delta": r.delta,
+                "pct": "n/a" if r.percent_delta is None else f"{r.percent_delta * 100:+.1f}%",
+                "material": "yes" if r.material else "no",
+            }
+            for r in ranked_live
+        ]
+        st.dataframe(out_table, use_container_width=True, hide_index=True)
+
+        if material:
+            top = ranked_live[0]
+            pct = "n/a" if top.percent_delta is None else f"{top.percent_delta * 100:+.1f}%"
+            st.success(
+                f"engine flags **{len(material)}** material delta(s). biggest: "
+                f"**{top.tag}** {top.prior:,.1f} -> {top.current:,.1f} "
+                f"({top.delta:+,.1f}, {pct}) — this is the kind of move that would "
+                f"trigger a memo + pillar re-check."
+            )
+        else:
+            st.info(
+                "no material deltas: every change is below the materiality "
+                "threshold, so the engine would not raise a memo this quarter."
+            )
+
+st.caption(
+    "v0.1 ships one MSFT fixture report. the committed view reads "
+    "`reports/*.jsonl`; the interactive view above drives the real engine in "
+    "`earnings_pillar_diff/model.py`. repo: github.com/AthenaTheOwl/earnings-pillar-diff"
 )
