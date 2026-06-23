@@ -1,0 +1,4 @@
+# Streamlit Community Cloud reads this file. The app (streamlit_app.py) reads the
+# committed reports/*.jsonl directly, so it only needs streamlit. The CLI/package
+# under earnings_pillar_diff/ has its own deps in pyproject.toml.
+streamlit>=1.40

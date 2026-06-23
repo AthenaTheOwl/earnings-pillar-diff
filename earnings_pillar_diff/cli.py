@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import subprocess
 import sys
 import urllib.request
@@ -13,6 +14,7 @@ from earnings_pillar_diff.model import build_delta_rows, normalize_line_items
 from earnings_pillar_diff.scoring import DEFAULT_USER_AGENT, TICKERS, require_action, require_ticker
 
 ROOT = Path(__file__).resolve().parents[1]
+REPORTS = ROOT / "reports"
 
 
 def load_json(path: Path) -> Any:
@@ -185,6 +187,94 @@ def command_memo(args: argparse.Namespace) -> int:
     return 0
 
 
+def latest_report(reports_dir: Path = REPORTS) -> Path | None:
+    files = sorted(reports_dir.glob("*.jsonl"))
+    return files[-1] if files else None
+
+
+def read_report(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Split a report jsonl into its single header row and its delta rows."""
+    rows = [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    header: dict[str, Any] = {}
+    deltas: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("type") == "report":
+            header = row
+        elif row.get("type") == "delta":
+            deltas.append(row)
+    return header, deltas
+
+
+def parse_usd(text: Any) -> float:
+    """Pull a signed USD-millions number out of strings like '-USD 15,700M'."""
+    if isinstance(text, (int, float)):
+        return float(text)
+    cleaned = re.sub(r"[^\d.\-+]", "", str(text).replace(",", ""))
+    if cleaned in {"", "-", "+", "."}:
+        return 0.0
+    try:
+        return float(cleaned)
+    except ValueError:
+        return 0.0
+
+
+def short_tag(tag: str) -> str:
+    return tag.split(":", 1)[-1]
+
+
+def command_show(args: argparse.Namespace) -> int:
+    """Print a readable, ranked view of a committed report (no args needed)."""
+    path = Path(args.report) if args.report else latest_report()
+    if path is None or not path.is_file():
+        raise SystemExit(
+            "no report found under reports/*.jsonl — run a diff + memo pass first"
+        )
+    header, deltas = read_report(path)
+    if not deltas:
+        raise SystemExit(f"{path.name} has no delta rows")
+
+    ticker = header.get("ticker", path.stem.split("-")[0])
+    quarter = header.get("quarter", "?")
+    action = header.get("action", "?")
+    pillars = ", ".join(header.get("pillars_affected", [])) or "none"
+
+    ranked = sorted(deltas, key=lambda d: abs(parse_usd(d.get("delta"))), reverse=True)
+
+    print(f"earnings-pillar-diff - {ticker} {quarter} 10-Q line-item deltas")
+    print(
+        f"{len(deltas)} delta(s) vs prior quarter, ranked by absolute change. "
+        f"action: {action}  |  pillars: {pillars}\n"
+    )
+    header_line = (
+        f"{'line item':<46} {'prior':>14} {'current':>14} {'delta':>14} {'pct':>8}"
+    )
+    print(header_line)
+    print("-" * len(header_line))
+    for row in ranked:
+        print(
+            f"{short_tag(str(row.get('tag', '?')))[:46]:<46} "
+            f"{str(row.get('prior', '')):>14} "
+            f"{str(row.get('current', '')):>14} "
+            f"{str(row.get('delta', '')):>14} "
+            f"{str(row.get('percent_delta', '')):>8}"
+        )
+
+    top = ranked[0]
+    print(
+        f"\nbiggest move: {short_tag(str(top.get('tag', '?')))} "
+        f"{top.get('prior')} -> {top.get('current')} "
+        f"({top.get('delta')}, {top.get('percent_delta')}). "
+        f"action on {ticker} {quarter}: {action}."
+    )
+    if header.get("revert_threshold"):
+        print(f"revert threshold: {header['revert_threshold']}")
+    return 0
+
+
 def command_validate(args: argparse.Namespace) -> int:
     repo_root = Path(args.root)
     commands = [
@@ -237,6 +327,14 @@ def build_parser() -> argparse.ArgumentParser:
     memo.add_argument("--filing-date", required=True)
     memo.add_argument("--output", required=True)
     memo.set_defaults(func=command_memo)
+
+    show = sub.add_parser("show", help="print a readable ranked view of a committed report")
+    show.add_argument(
+        "--report",
+        default=None,
+        help="path to a report jsonl (default: latest under reports/)",
+    )
+    show.set_defaults(func=command_show)
 
     validate = sub.add_parser("validate", help="run repository validation gates")
     validate.add_argument("--root", default=ROOT.as_posix())
