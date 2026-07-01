@@ -85,3 +85,5 @@ def test_diff_writes_material_delta() -> None:
         payload = json.loads(output.read_text(encoding="utf-8"))
         assert payload["material_deltas"][0]["delta"] == 125
         assert payload["material_deltas"][0]["tag"] == "us-gaap:PurchaseObligation"
+        # pin the percent_delta sign/formula through the diff path (1000 -> 1125)
+        assert payload["material_deltas"][0]["percent_delta"] == 0.125
