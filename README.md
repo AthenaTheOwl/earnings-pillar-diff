@@ -127,5 +127,3 @@ earnings-pillar-diff/
 ## License
 
 MIT. See LICENSE.
-</content>
-</invoke>
