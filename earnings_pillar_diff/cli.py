@@ -18,7 +18,17 @@ REPORTS = ROOT / "reports"
 
 
 def load_json(path: Path) -> Any:
-    return json.loads(path.read_text(encoding="utf-8"))
+    # Surface bad --prior-file/--current-file/--delta-file paths as clean CLI
+    # errors instead of raw tracebacks: a missing, unreadable, or directory
+    # path is user input, not a bug.
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SystemExit(f"cannot read {path}: {exc.strerror or exc}") from exc
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"{path} is not valid JSON: {exc}") from exc
 
 
 def write_json(path: Path, payload: Any) -> None:
