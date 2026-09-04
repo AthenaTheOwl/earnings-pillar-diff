@@ -5,3 +5,7 @@
 streamlit>=1.40
 # make the earnings_pillar_diff package importable on Streamlit Cloud
 .
+
+# required by scripts/validate_data_conformance.py (DEC: data-conformance gate)
+jsonschema
+pyyaml
