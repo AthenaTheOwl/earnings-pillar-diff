@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Event-driven 10-Q delta reports mapped to active thesis pillars."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pyyaml>=6.0",
+    "jsonschema>=4.0",
+]
 
 [project.scripts]
 epd = "earnings_pillar_diff.cli:main"
