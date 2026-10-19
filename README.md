@@ -127,3 +127,7 @@ earnings-pillar-diff/
 ## License
 
 MIT. See LICENSE.
+
+## Method update
+
+[October method update: A filing delta needs a comparable period and context](docs/comparable-filing-contexts.md).
