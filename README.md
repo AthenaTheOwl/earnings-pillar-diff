@@ -1,9 +1,9 @@
 # earnings-pillar-diff
 
-MSFT spent 44,477M on property and equipment one year and 64,551M the next — a 45%
-jump — while its purchase obligations fell 14.5%. Two numbers in a 10-Q, four
-quarters apart, that decide whether a thesis pillar holds. This repo finds them and
-writes down what to do about it.
+MSFT spent 44,477M on property and equipment in fiscal 2024 and 64,551M in fiscal
+2025 — a 45% jump — while its purchase obligations fell 14.5%. Two numbers in a
+10-K, each against the prior fiscal year, that decide whether a thesis pillar holds.
+This repo finds them and writes down what to do about it.
 
 ## What it does
 
@@ -29,13 +29,13 @@ One command, no setup. It reads the committed report and ranks the deltas:
 
 ```bash
 uv run epd show
-# earnings-pillar-diff - MSFT 2025Q4 10-Q line-item deltas
-# 2 delta(s) vs prior quarter, ranked by absolute change. action: HOLD ...
+# earnings-pillar-diff - MSFT 2025Q4 10-K line-item deltas
+# 2 delta(s) vs prior fiscal year, ranked by absolute change. action: HOLD ...
 ```
 
 ```
-earnings-pillar-diff - MSFT 2025Q4 10-Q line-item deltas
-2 delta(s) vs prior quarter, ranked by absolute change. action: HOLD  |  pillars: chip-cowos-2027
+earnings-pillar-diff - MSFT 2025Q4 10-K line-item deltas
+2 delta(s) vs prior fiscal year, ranked by absolute change. action: HOLD  |  pillars: chip-cowos-2027
 
 line item                                               prior        current          delta      pct
 ----------------------------------------------------------------------------------------------------

@@ -25,6 +25,16 @@ def material_delta(prior: float, current: float) -> bool:
     return delta >= threshold or pct >= 0.05
 
 
+def filing_form(quarter: str) -> str:
+    """Fiscal Q4 is reported in the annual 10-K; Q1-Q3 in a 10-Q."""
+    return "10-K" if quarter.endswith("Q4") else "10-Q"
+
+
+def comparison_basis(form: str) -> str:
+    """The comparable period a delta from this form is measured against."""
+    return "prior fiscal year" if form == "10-K" else "prior quarter"
+
+
 def require_action(action: str) -> str:
     normalized = action.upper()
     if normalized not in ACTIONS:

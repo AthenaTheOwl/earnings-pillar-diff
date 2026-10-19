@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from earnings_pillar_diff.scoring import material_delta, percent_delta
+from earnings_pillar_diff.scoring import (
+    comparison_basis,
+    filing_form,
+    material_delta,
+    percent_delta,
+)
 
 
 def test_percent_delta_sign_and_zero_prior() -> None:
@@ -23,3 +28,12 @@ def test_material_delta_pct_branch_includes() -> None:
 def test_material_delta_below_threshold_excludes() -> None:
     # 2% move: 20 < threshold 50 and 0.02 < 0.05, so neither branch fires.
     assert material_delta(1000, 1020) is False
+
+
+def test_filing_form_and_comparison_basis_follow_fiscal_quarter() -> None:
+    # fiscal Q4 is the annual 10-K, measured against the prior fiscal year.
+    assert filing_form("2025Q4") == "10-K"
+    assert comparison_basis("10-K") == "prior fiscal year"
+    # interim quarters are 10-Qs, measured against the prior quarter.
+    assert filing_form("2026Q1") == "10-Q"
+    assert comparison_basis("10-Q") == "prior quarter"

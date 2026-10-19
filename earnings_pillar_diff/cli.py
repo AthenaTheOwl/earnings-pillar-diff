@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import Any
 
 from earnings_pillar_diff.model import build_delta_rows, normalize_line_items
-from earnings_pillar_diff.scoring import DEFAULT_USER_AGENT, TICKERS, require_action, require_ticker
+from earnings_pillar_diff.scoring import (
+    DEFAULT_USER_AGENT,
+    TICKERS,
+    comparison_basis,
+    filing_form,
+    require_action,
+    require_ticker,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports"
@@ -60,7 +67,7 @@ def command_fetch(args: argparse.Namespace) -> int:
         submissions_url = f"https://data.sec.gov/submissions/CIK{cik}.json"
         submissions = json.loads(request_text(submissions_url, user_agent))
         recent = submissions["filings"]["recent"]
-        desired_form = "10-K" if args.quarter.endswith("Q4") else "10-Q"
+        desired_form = filing_form(args.quarter)
         selected_index = next(
             (
                 idx
@@ -251,12 +258,13 @@ def command_show(args: argparse.Namespace) -> int:
     quarter = header.get("quarter", "?")
     action = header.get("action", "?")
     pillars = ", ".join(header.get("pillars_affected", [])) or "none"
+    form = filing_form(str(quarter))
 
     ranked = sorted(deltas, key=lambda d: abs(parse_usd(d.get("delta"))), reverse=True)
 
-    print(f"earnings-pillar-diff - {ticker} {quarter} 10-Q line-item deltas")
+    print(f"earnings-pillar-diff - {ticker} {quarter} {form} line-item deltas")
     print(
-        f"{len(deltas)} delta(s) vs prior quarter, ranked by absolute change. "
+        f"{len(deltas)} delta(s) vs {comparison_basis(form)}, ranked by absolute change. "
         f"action: {action}  |  pillars: {pillars}\n"
     )
     header_line = (

@@ -23,11 +23,42 @@ def test_show_prints_ranked_committed_report(capsys) -> None:
     out = capsys.readouterr().out
     # header line names the ticker/quarter of the committed report
     assert "MSFT 2025Q4" in out
+    # fiscal Q4 is the annual 10-K, so the deltas are against the prior fiscal
+    # year, not a prior quarter
+    assert "MSFT 2025Q4 10-K line-item deltas" in out
+    assert "2 delta(s) vs prior fiscal year" in out
+    assert "10-Q" not in out
+    assert "vs prior quarter" not in out
     # capex (+20,074M) is the biggest absolute move, so it leads the headline
     assert "biggest move: PaymentsToAcquirePropertyPlantAndEquipment" in out
     # the ranked table lists both delta rows
     assert "UnrecordedUnconditionalPurchaseObligation"[:30] in out
     assert "action on MSFT 2025Q4: HOLD." in out
+
+
+def test_show_labels_interim_report_as_10q_vs_prior_quarter(tmp_path, capsys) -> None:
+    report = tmp_path / "MSFT-2026Q1.jsonl"
+    report.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in [
+                {"type": "report", "ticker": "MSFT", "quarter": "2026Q1", "action": "HOLD"},
+                {
+                    "type": "delta",
+                    "tag": "us-gaap:PaymentsToAcquirePropertyPlantAndEquipment",
+                    "prior": "USD 100M",
+                    "current": "USD 125M",
+                    "delta": "+USD 25M",
+                    "percent_delta": "+25.0%",
+                },
+            ]
+        ),
+        encoding="utf-8",
+    )
+    assert main(["show", "--report", str(report)]) == 0
+    out = capsys.readouterr().out
+    assert "MSFT 2026Q1 10-Q line-item deltas" in out
+    assert "1 delta(s) vs prior quarter" in out
 
 
 def test_diff_writes_material_delta() -> None:
