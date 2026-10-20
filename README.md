@@ -116,6 +116,7 @@ earnings-pillar-diff/
   PRODUCT_BRIEF.md
   SYSTEM_MAP.md
   STATUS.md
+  docs/comparable-filing-contexts.md
   docs/first-pr.md
   docs/product-brief.md
   docs/system-map.md
