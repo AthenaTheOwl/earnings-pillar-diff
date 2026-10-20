@@ -11,7 +11,22 @@ from pathlib import Path
 from typing import Any
 
 from earnings_pillar_diff.model import build_delta_rows, normalize_line_items
-from earnings_pillar_diff.scoring import DEFAULT_USER_AGENT, TICKERS, require_action, require_ticker
+from earnings_pillar_diff.scoring import (
+    DEFAULT_USER_AGENT,
+    TICKERS,
+    comparison_basis,
+    filing_form,
+    fiscal_period_end,
+    require_action,
+    require_ticker,
+)
+from earnings_pillar_diff.xbrl import (
+    extract_facts,
+    is_lease_axis,
+    is_lease_commitment,
+    line_item_label,
+    line_items_for_period,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports"
@@ -60,17 +75,38 @@ def command_fetch(args: argparse.Namespace) -> int:
         submissions_url = f"https://data.sec.gov/submissions/CIK{cik}.json"
         submissions = json.loads(request_text(submissions_url, user_agent))
         recent = submissions["filings"]["recent"]
-        desired_form = "10-K" if args.quarter.endswith("Q4") else "10-Q"
+        desired_form = filing_form(args.quarter)
+        # match the requested fiscal period, not just the form: the newest
+        # 10-K is not the 10-K for an older --quarter.
+        try:
+            period_end = fiscal_period_end(args.quarter, submissions.get("fiscalYearEnd", ""))
+        except ValueError as exc:
+            raise SystemExit(f"{exc}; pass --filing-url instead") from exc
+        report_dates = recent.get("reportDate") or []
+
+        def matches_period(idx: int) -> bool:
+            try:
+                reported = dt.date.fromisoformat(report_dates[idx])
+            except (IndexError, TypeError, ValueError):
+                return False
+            # 52/53-week fiscal calendars end a few days off the nominal date
+            return abs((reported - period_end).days) <= 15
+
         selected_index = next(
             (
                 idx
                 for idx, form in enumerate(recent["form"])
-                if form == desired_form and recent["primaryDocument"][idx]
+                if form == desired_form
+                and recent["primaryDocument"][idx]
+                and matches_period(idx)
             ),
             None,
         )
         if selected_index is None:
-            raise SystemExit(f"no {desired_form} filing found for {ticker}")
+            raise SystemExit(
+                f"no {desired_form} filing for {ticker} {args.quarter} "
+                f"(period ending ~{period_end.isoformat()}); pass --filing-url"
+            )
         accession = recent["accessionNumber"][selected_index]
         primary = recent["primaryDocument"][selected_index]
         cik_int = str(int(cik))
@@ -95,6 +131,25 @@ def command_fetch(args: argparse.Namespace) -> int:
         },
     )
     print(f"wrote {filing_path}")
+    return 0
+
+
+def command_extract(args: argparse.Namespace) -> int:
+    path = Path(args.filing)
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise SystemExit(f"cannot read {path}: {exc.strerror or exc}") from exc
+    rows = line_items_for_period(
+        extract_facts(text), args.period_end, args.duration_months, args.anchor
+    )
+    if args.tag:
+        wanted = set(args.tag)
+        rows = [row for row in rows if row["tag"] in wanted]
+    if not rows:
+        raise SystemExit(f"no USD facts in {path} for period ending {args.period_end}")
+    write_json(Path(args.output), {"line_items": rows})
+    print(f"wrote {args.output} ({len(rows)} fact(s))")
     return 0
 
 
@@ -166,15 +221,17 @@ def command_memo(args: argparse.Namespace) -> int:
             "---",
             "",
             "## Line-item deltas",
-            "| XBRL tag | Prior | Current | Delta | EDGAR anchor |",
-            "|---|---:|---:|---:|---|",
+            "| XBRL tag | Reported as | Prior | Current | Delta | EDGAR anchor |",
+            "|---|---|---:|---:|---:|---|",
         ]
     )
     for row in deltas:
         delta_text = f"{fmt_number(float(row['delta']))} ({fmt_pct(row.get('percent_delta'))})"
+        axis = str(row.get("axis") or "")
+        tag_cell = f"{row['tag']} on {axis}" if axis else str(row["tag"])
         lines.append(
             "| "
-            f"{row['tag']} | {fmt_number(float(row['prior']))} | "
+            f"{tag_cell} | {reported_as(row)} | {fmt_number(float(row['prior']))} | "
             f"{fmt_number(float(row['current']))} | {delta_text} | "
             f"[{row['tag']}]({row.get('anchor') or args.filing_url}) |"
         )
@@ -195,6 +252,22 @@ def command_memo(args: argparse.Namespace) -> int:
     output.write_text("\n".join(lines), encoding="utf-8")
     print(f"wrote {output}")
     return 0
+
+
+def reported_as(row: dict[str, Any]) -> str:
+    """Name a delta row by what it measures, with the members it summed.
+
+    The name comes from the tag and its axis, never from a free-text label:
+    a purchase-obligation tag on a lease axis is a lease commitment, and its
+    value is the sum of the lease-class members on each side.
+    """
+    axis = str(row.get("axis") or "")
+    label = line_item_label(str(row.get("tag", "")), axis)
+    if not is_lease_axis(axis):
+        return label
+    prior = " + ".join(row.get("prior_members") or []) or "none"
+    current = " + ".join(row.get("current_members") or []) or "none"
+    return f"{label}, lease classes summed (prior: {prior}; current: {current})"
 
 
 def latest_report(reports_dir: Path = REPORTS) -> Path | None:
@@ -236,6 +309,11 @@ def short_tag(tag: str) -> str:
     return tag.split(":", 1)[-1]
 
 
+def row_label(row: dict[str, Any]) -> str:
+    """The line-item column, named from the tag and its axis (see reported_as)."""
+    return line_item_label(str(row.get("tag", "?")), row.get("axis"))
+
+
 def command_show(args: argparse.Namespace) -> int:
     """Print a readable, ranked view of a committed report (no args needed)."""
     path = Path(args.report) if args.report else latest_report()
@@ -251,12 +329,13 @@ def command_show(args: argparse.Namespace) -> int:
     quarter = header.get("quarter", "?")
     action = header.get("action", "?")
     pillars = ", ".join(header.get("pillars_affected", [])) or "none"
+    form = filing_form(str(quarter))
 
     ranked = sorted(deltas, key=lambda d: abs(parse_usd(d.get("delta"))), reverse=True)
 
-    print(f"earnings-pillar-diff - {ticker} {quarter} 10-Q line-item deltas")
+    print(f"earnings-pillar-diff - {ticker} {quarter} {form} line-item deltas")
     print(
-        f"{len(deltas)} delta(s) vs prior quarter, ranked by absolute change. "
+        f"{len(deltas)} delta(s) vs {comparison_basis(form)}, ranked by absolute change. "
         f"action: {action}  |  pillars: {pillars}\n"
     )
     header_line = (
@@ -266,29 +345,48 @@ def command_show(args: argparse.Namespace) -> int:
     print("-" * len(header_line))
     for row in ranked:
         print(
-            f"{short_tag(str(row.get('tag', '?')))[:46]:<46} "
+            f"{row_label(row)[:46]:<46} "
             f"{str(row.get('prior', '')):>14} "
             f"{str(row.get('current', '')):>14} "
             f"{str(row.get('delta', '')):>14} "
             f"{str(row.get('percent_delta', '')):>8}"
         )
 
+    notes = [row for row in ranked if is_lease_commitment(str(row.get("tag", "")), row.get("axis"))]
+    for row in notes:
+        print(
+            f"\n{row_label(row)}: {row.get('tag')} on {row.get('axis')}, reported as a "
+            "lease commitment, not a purchase obligation. "
+            f"members summed: prior {' + '.join(row.get('prior_members') or []) or 'none'}; "
+            f"current {' + '.join(row.get('current_members') or []) or 'none'}."
+        )
+        first = row.get("as_first_reported")
+        if isinstance(first, dict):
+            print(
+                f"corrected {row.get('corrected', '?')}: first reported as "
+                f"{first.get('prior')} -> {first.get('current')} "
+                f"({first.get('delta')}, {first.get('percent_delta')}), "
+                f"{first.get('basis', 'a different basis')}."
+            )
+
     top = ranked[0]
     print(
-        f"\nbiggest move: {short_tag(str(top.get('tag', '?')))} "
+        f"\nbiggest move: {row_label(top)} "
         f"{top.get('prior')} -> {top.get('current')} "
         f"({top.get('delta')}, {top.get('percent_delta')}). "
         f"action on {ticker} {quarter}: {action}."
     )
     if header.get("revert_threshold"):
         print(f"revert threshold: {header['revert_threshold']}")
+    for note in header.get("corrections") or []:
+        print(f"correction: {note}")
     return 0
 
 
 def command_validate(args: argparse.Namespace) -> int:
     repo_root = Path(args.root)
     commands = [
-        [sys.executable, "scripts/voice_lint.py", "earnings_diff/"],
+        [sys.executable, "scripts/voice_lint.py", "earnings_diff/", "corrections/"],
         [sys.executable, "scripts/validate_memo_schema.py"],
         [
             sys.executable,
@@ -316,6 +414,22 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument("--output-dir", default="data/filings")
     fetch.add_argument("--user-agent", default=None)
     fetch.set_defaults(func=command_fetch)
+
+    extract = sub.add_parser(
+        "extract", help="pull USD line items for one period out of a cached inline XBRL filing"
+    )
+    extract.add_argument("--filing", required=True, help="cached .htm filing (see fetch)")
+    extract.add_argument("--period-end", required=True, help="balance date, YYYY-MM-DD")
+    extract.add_argument(
+        "--duration-months",
+        type=int,
+        default=12,
+        help="length of duration facts to keep: 12 for a 10-K year, 3 for a quarter",
+    )
+    extract.add_argument("--tag", action="append", default=None, help="keep only this tag (repeatable)")
+    extract.add_argument("--anchor", default="", help="EDGAR URL to record on each line item")
+    extract.add_argument("--output", required=True)
+    extract.set_defaults(func=command_extract)
 
     diff = sub.add_parser("diff", help="compute line-item deltas from JSON files")
     diff.add_argument("--ticker", required=True)

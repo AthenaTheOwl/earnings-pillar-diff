@@ -1,9 +1,9 @@
 """earnings-pillar-diff - live demo (Streamlit Community Cloud).
 
-Reads the committed report under reports/*.jsonl and shows the quarter-over-
-quarter 10-Q line-item deltas for a hyperscaler print, ranked by absolute
-change, with the affected thesis pillar and the committed action. No network,
-no secrets - runs entirely off the committed fixture report.
+Reads the committed report under reports/*.jsonl and shows the filing
+line-item deltas against the comparable prior period for a hyperscaler print,
+ranked by absolute change, with the affected thesis pillar and the committed
+action. No network, no secrets - runs entirely off the committed fixture report.
 
 Deploy: Streamlit Community Cloud -> New app -> repo AthenaTheOwl/earnings-pillar-diff,
 branch main, main file streamlit_app.py.
@@ -15,6 +15,9 @@ import re
 from pathlib import Path
 
 import streamlit as st
+
+from earnings_pillar_diff.scoring import comparison_basis, filing_form
+from earnings_pillar_diff.xbrl import is_lease_commitment, line_item_label
 
 REPO = Path(__file__).resolve().parent
 REPORTS = REPO / "reports"
@@ -36,6 +39,11 @@ def short_tag(tag: str) -> str:
     return str(tag).split(":", 1)[-1]
 
 
+def row_label(row: dict) -> str:
+    # a purchase-obligation tag on a lease axis is a lease commitment
+    return line_item_label(str(row.get("tag", "?")), row.get("axis"))
+
+
 def load_report(path: Path) -> tuple[dict, list[dict]]:
     rows = [
         json.loads(line)
@@ -52,11 +60,13 @@ def load_report(path: Path) -> tuple[dict, list[dict]]:
     return header, deltas
 
 
-st.set_page_config(page_title="earnings-pillar-diff - 10-Q delta memo", layout="wide")
+st.set_page_config(page_title="earnings-pillar-diff - filing delta memo", layout="wide")
 st.title("earnings-pillar-diff")
 st.caption(
-    "quarter-over-quarter 10-Q capex and purchase-obligation deltas for a "
-    "hyperscaler print, mapped onto a named thesis pillar with a committed action."
+    "filing capex and lease-commitment deltas against the comparable prior "
+    "period for a hyperscaler print, mapped onto a named thesis pillar with a "
+    "committed action. a fact on a lease axis is read as a lease, whatever its "
+    "tag is called, and its lease classes are summed."
 )
 
 files = sorted(REPORTS.glob("*.jsonl"))
@@ -76,20 +86,22 @@ ticker = header.get("ticker", choice.split("-")[0])
 quarter = header.get("quarter", "?")
 action = header.get("action", "?")
 pillars = ", ".join(header.get("pillars_affected", [])) or "none"
+form = filing_form(str(quarter))
 
-st.subheader(f"{ticker} {quarter} - line-item deltas vs prior quarter")
+st.subheader(f"{ticker} {quarter} {form} - line-item deltas vs {comparison_basis(form)}")
 
 ranked = sorted(deltas, key=lambda d: abs(parse_usd(d.get("delta"))), reverse=True)
 top = ranked[0]
 
 c1, c2, c3 = st.columns(3)
 c1.metric("material deltas", len(deltas))
-c2.metric("biggest move", top.get("delta", "?"), help=short_tag(top.get("tag", "?")))
+c2.metric("biggest move", top.get("delta", "?"), help=row_label(top))
 c3.metric("action", action, help="committed thesis action for this print")
 
 table = [
     {
-        "line item": short_tag(r.get("tag", "?")),
+        "line item": row_label(r),
+        "XBRL tag": short_tag(r.get("tag", "?")),
         "prior": r.get("prior"),
         "current": r.get("current"),
         "delta": r.get("delta"),
@@ -101,14 +113,33 @@ table = [
 st.dataframe(table, use_container_width=True, hide_index=True)
 
 st.info(
-    f"**biggest move:** {short_tag(top.get('tag', '?'))} "
+    f"**biggest move:** {row_label(top)} "
     f"{top.get('prior')} -> {top.get('current')} "
     f"({top.get('delta')}, {top.get('percent_delta')}). "
     f"pillar(s): {pillars}. action on {ticker} {quarter}: **{action}**."
 )
 
+for r in ranked:
+    if not is_lease_commitment(str(r.get("tag", "")), r.get("axis")):
+        continue
+    st.caption(
+        f"{row_label(r)}: {r.get('tag')} on {r.get('axis')} is a lease commitment, "
+        f"not a purchase obligation. members summed: prior "
+        f"{' + '.join(r.get('prior_members') or []) or 'none'}; current "
+        f"{' + '.join(r.get('current_members') or []) or 'none'}."
+    )
+    first = r.get("as_first_reported")
+    if isinstance(first, dict):
+        st.caption(
+            f"corrected {r.get('corrected', '?')}: first reported as {first.get('prior')} "
+            f"-> {first.get('current')} ({first.get('delta')}, {first.get('percent_delta')}), "
+            f"{first.get('basis', 'a different basis')}."
+        )
+
 if header.get("revert_threshold"):
     st.caption(f"revert threshold: {header['revert_threshold']}")
+for note in header.get("corrections") or []:
+    st.caption(f"correction: {note}")
 
 # -------------------------------------------------------------------------
 # interactive: drive the real diff engine on your own line items
@@ -119,7 +150,7 @@ st.divider()
 st.subheader("diff it yourself")
 st.caption(
     "the section above is a committed report. below, you drive the repo's real "
-    "engine: edit prior-quarter and current-quarter line-item values and "
+    "engine: edit prior-period and current-period line-item values and "
     "`earnings_pillar_diff.model.build_delta_rows` recomputes every delta, "
     "percent change, and materiality flag live — the same code the `diff` CLI "
     "verb runs. materiality uses `scoring.material_delta` (delta >= "

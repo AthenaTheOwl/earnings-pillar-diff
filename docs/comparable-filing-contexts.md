@@ -11,4 +11,3 @@ The proposed acceptance record should identify both accession numbers and contex
 ## References
 
 - https://www.sec.gov/structureddata/osd-inline-xbrl.html
-- https://github.com/3orionkings/ai-product-team/blob/main/workflows/process-change.md
