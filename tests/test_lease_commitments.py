@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from earnings_pillar_diff.cli import main
+from earnings_pillar_diff.cli import main, read_report
 from earnings_pillar_diff.model import build_delta_rows, normalize_line_items
 from earnings_pillar_diff.xbrl import (
     LEASE_COMMITMENT_LABEL,
@@ -208,6 +208,36 @@ def test_extract_diff_memo_names_the_lease_commitment(tmp_path) -> None:
     # the template still passes the memo gate
     validator = load_memo_validator()
     assert validator.validate_memo(memo) == []
+
+
+def test_committed_report_lease_row_matches_the_filings() -> None:
+    header, deltas = read_report(ROOT / "reports" / "MSFT-2025Q4.jsonl")
+    row = next(d for d in deltas if d["tag"] == OBLIGATION)
+    computed = obligation_row(
+        filing_items("msft-20240630", "2024-06-30"), filing_items("msft-20250630", "2025-06-30")
+    )
+    assert row["axis"] == LEASE_AXIS
+    assert row["prior"] == f"USD {computed.prior:,.0f}M"
+    assert row["current"] == f"USD {computed.current:,.0f}M"
+    assert row["delta"] == f"-USD {abs(computed.delta):,.0f}M"
+    assert row["percent_delta"] == f"{computed.percent_delta * 100:+.1f}%"
+    assert row["prior_members"] == list(computed.prior_members)
+    assert row["current_members"] == list(computed.current_members)
+    # the first-reported figures are kept beside the correction
+    assert row["as_first_reported"]["percent_delta"] == "-14.5%"
+    # the recorded call is left as written
+    assert header["action"] == "HOLD"
+    assert header["revert_threshold"].startswith("If next-quarter purchase obligations fall below USD 85,000M")
+
+
+def test_show_names_the_lease_row_a_lease_commitment(capsys) -> None:
+    assert main(["show"]) == 0
+    out = capsys.readouterr().out
+    table = [line for line in out.splitlines() if line.startswith(LEASE_COMMITMENT_LABEL)]
+    assert table and "-20.8%" in table[0] and "USD 117,000M" in table[0]
+    assert "reported as a lease commitment, not a purchase obligation" in out
+    assert "first reported as USD 108,400M -> USD 92,700M (-USD 15,700M, -14.5%)" in out
+    assert "correction: 2026-10-20, corrections/MSFT-2025Q4.md" in out
 
 
 def test_show_derives_the_label_from_the_axis(tmp_path, capsys) -> None:

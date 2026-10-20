@@ -90,7 +90,13 @@ STRUCTURAL = [
 ]
 
 ALLOWLIST_RE = re.compile(r"voice_lint:allow\s+([A-Za-z0-9\-_ ]+)")
-DEFAULT_TARGETS = ["README.md", "docs/**/*.md", "specs/**/*.md", "earnings_diff/**/*.md"]
+DEFAULT_TARGETS = [
+    "README.md",
+    "docs/**/*.md",
+    "specs/**/*.md",
+    "earnings_diff/**/*.md",
+    "corrections/**/*.md",
+]
 SKIP_DIRS = {".git", ".venv", "data", "node_modules", "dist"}
 
 

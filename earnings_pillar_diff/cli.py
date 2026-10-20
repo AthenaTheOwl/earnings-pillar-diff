@@ -386,7 +386,7 @@ def command_show(args: argparse.Namespace) -> int:
 def command_validate(args: argparse.Namespace) -> int:
     repo_root = Path(args.root)
     commands = [
-        [sys.executable, "scripts/voice_lint.py", "earnings_diff/"],
+        [sys.executable, "scripts/voice_lint.py", "earnings_diff/", "corrections/"],
         [sys.executable, "scripts/validate_memo_schema.py"],
         [
             sys.executable,

@@ -31,9 +31,11 @@ def test_show_prints_ranked_committed_report(capsys) -> None:
     assert "2 delta(s) vs prior fiscal year" in out
     assert "10-Q" not in out
     assert "vs prior quarter" not in out
-    # capex (+20,074M) is the biggest absolute move, so it leads the headline
-    assert "biggest move: PaymentsToAcquirePropertyPlantAndEquipment" in out
+    # leases not yet commenced, summed over lease classes (-24,300M), is the
+    # biggest absolute move, ahead of capex (+20,074M)
+    assert "biggest move: lease commitments not yet commenced" in out
     # the ranked table lists both delta rows
+    assert "PaymentsToAcquirePropertyPlantAndEquipment" in out
     assert "UnrecordedUnconditionalPurchaseObligation"[:30] in out
     assert "action on MSFT 2025Q4: HOLD." in out
 
