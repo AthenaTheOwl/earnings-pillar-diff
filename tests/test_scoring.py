@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import datetime as dt
+
 from earnings_pillar_diff.scoring import (
     comparison_basis,
     filing_form,
+    fiscal_period_end,
     material_delta,
     percent_delta,
 )
@@ -37,3 +40,12 @@ def test_filing_form_and_comparison_basis_follow_fiscal_quarter() -> None:
     # interim quarters are 10-Qs, measured against the prior quarter.
     assert filing_form("2026Q1") == "10-Q"
     assert comparison_basis("10-Q") == "prior quarter"
+
+
+def test_fiscal_period_end_names_fiscal_year_by_its_end() -> None:
+    # MSFT: fiscal year ends June 30
+    assert fiscal_period_end("2025Q4", "0630") == dt.date(2025, 6, 30)
+    assert fiscal_period_end("2025Q1", "0630") == dt.date(2024, 9, 30)
+    assert fiscal_period_end("2025Q2", "0630") == dt.date(2024, 12, 31)
+    # calendar fiscal year
+    assert fiscal_period_end("2025Q1", "1231") == dt.date(2025, 3, 31)

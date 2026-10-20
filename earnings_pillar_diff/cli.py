@@ -16,6 +16,7 @@ from earnings_pillar_diff.scoring import (
     TICKERS,
     comparison_basis,
     filing_form,
+    fiscal_period_end,
     require_action,
     require_ticker,
 )
@@ -68,16 +69,37 @@ def command_fetch(args: argparse.Namespace) -> int:
         submissions = json.loads(request_text(submissions_url, user_agent))
         recent = submissions["filings"]["recent"]
         desired_form = filing_form(args.quarter)
+        # match the requested fiscal period, not just the form: the newest
+        # 10-K is not the 10-K for an older --quarter.
+        try:
+            period_end = fiscal_period_end(args.quarter, submissions.get("fiscalYearEnd", ""))
+        except ValueError as exc:
+            raise SystemExit(f"{exc}; pass --filing-url instead") from exc
+        report_dates = recent.get("reportDate") or []
+
+        def matches_period(idx: int) -> bool:
+            try:
+                reported = dt.date.fromisoformat(report_dates[idx])
+            except (IndexError, TypeError, ValueError):
+                return False
+            # 52/53-week fiscal calendars end a few days off the nominal date
+            return abs((reported - period_end).days) <= 15
+
         selected_index = next(
             (
                 idx
                 for idx, form in enumerate(recent["form"])
-                if form == desired_form and recent["primaryDocument"][idx]
+                if form == desired_form
+                and recent["primaryDocument"][idx]
+                and matches_period(idx)
             ),
             None,
         )
         if selected_index is None:
-            raise SystemExit(f"no {desired_form} filing found for {ticker}")
+            raise SystemExit(
+                f"no {desired_form} filing for {ticker} {args.quarter} "
+                f"(period ending ~{period_end.isoformat()}); pass --filing-url"
+            )
         accession = recent["accessionNumber"][selected_index]
         primary = recent["primaryDocument"][selected_index]
         cik_int = str(int(cik))
