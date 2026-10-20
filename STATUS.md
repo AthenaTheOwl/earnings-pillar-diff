@@ -17,11 +17,10 @@ v0.1 is a data-report repo.
 - The committed sample report is hand-entered; its lease row is checked against `epd extract` on verbatim filing excerpts, and the capex row matches them.
 - Only one issuer (MSFT) wired; no GOOG / AMZN / META / ORCL tag maps yet.
 - `extract` leaves out facts on axes other than the lease axis.
-- No outcome entries yet. The 90-day review window for the MSFT 2025Q4 memo (filed 2025-07-30) closed on 2025-10-28, and the outcome entry is still to be written by the owner. The next-quarter filing is the Q1 FY2026 10-Q (accession 0001193125-25-256321, filed 2025-10-29); per the correction, its threshold figure is the sum of lease classes, which that filing tags `msft:FinanceLeaseMember`.
+- One outcome entry: `outcome/MSFT-2025Q4.md` grades the MSFT 2025Q4 memo against the Q1 FY2026 10-Q (USD 106,200M, above the USD 85,000M trigger; the HOLD held).
 
 ## Next feature queue
 
 1. Replace the hand-entered sample values with parser-produced deltas from the actual filing XBRL.
 2. Add issuer tag maps for GOOG, AMZN, META, and ORCL.
-3. Write the MSFT 2025Q4 outcome entry (window closed 2025-10-28; owner to write).
-4. Run the `validate` command (pillar references) in CI on every PR; CI runs the tests, memo schema, voice and data-conformance gates today.
+3. Run the `validate` command (pillar references) in CI on every PR; CI runs the tests, memo schema, voice and data-conformance gates today.

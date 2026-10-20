@@ -96,6 +96,7 @@ DEFAULT_TARGETS = [
     "specs/**/*.md",
     "earnings_diff/**/*.md",
     "corrections/**/*.md",
+    "outcome/**/*.md",
 ]
 SKIP_DIRS = {".git", ".venv", "data", "node_modules", "dist"}
 

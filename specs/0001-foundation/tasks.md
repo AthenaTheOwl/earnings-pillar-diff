@@ -31,4 +31,4 @@
 
 - [ ] ORCL, AMZN, META, GOOG parsers (spec 0003)
 - [ ] LLM-assisted pillar mapping (spec 0004)
-- [ ] 90-day outcome capture (spec 0005)
+- [x] 90-day outcome capture (spec 0005): first entry, `outcome/MSFT-2025Q4.md`

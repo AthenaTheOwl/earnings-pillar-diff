@@ -137,7 +137,7 @@ Python CLI, tests, product docs, and one checked-in MSFT report. The sample unde
 `earnings_diff/MSFT-2025Q4.md` and `reports/MSFT-2025Q4.jsonl` is hand-entered — it
 exercises the schema, voice, and pillar gates. Its lease row was corrected on
 2026-10-20 and is now checked against `epd extract` output on the filing excerpts.
-The 90-day outcome entry for the memo is not written yet; see STATUS.md.
+Its 90-day outcome is graded in `outcome/MSFT-2025Q4.md`: the HOLD held.
 
 ## Layout
 
