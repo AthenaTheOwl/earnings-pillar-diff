@@ -17,6 +17,7 @@ from pathlib import Path
 import streamlit as st
 
 from earnings_pillar_diff.scoring import comparison_basis, filing_form
+from earnings_pillar_diff.xbrl import is_lease_commitment, line_item_label
 
 REPO = Path(__file__).resolve().parent
 REPORTS = REPO / "reports"
@@ -38,6 +39,11 @@ def short_tag(tag: str) -> str:
     return str(tag).split(":", 1)[-1]
 
 
+def row_label(row: dict) -> str:
+    # a purchase-obligation tag on a lease axis is a lease commitment
+    return line_item_label(str(row.get("tag", "?")), row.get("axis"))
+
+
 def load_report(path: Path) -> tuple[dict, list[dict]]:
     rows = [
         json.loads(line)
@@ -57,9 +63,10 @@ def load_report(path: Path) -> tuple[dict, list[dict]]:
 st.set_page_config(page_title="earnings-pillar-diff - filing delta memo", layout="wide")
 st.title("earnings-pillar-diff")
 st.caption(
-    "filing capex and purchase-obligation deltas against the comparable prior "
+    "filing capex and lease-commitment deltas against the comparable prior "
     "period for a hyperscaler print, mapped onto a named thesis pillar with a "
-    "committed action."
+    "committed action. a fact on a lease axis is read as a lease, whatever its "
+    "tag is called, and its lease classes are summed."
 )
 
 files = sorted(REPORTS.glob("*.jsonl"))
@@ -88,12 +95,13 @@ top = ranked[0]
 
 c1, c2, c3 = st.columns(3)
 c1.metric("material deltas", len(deltas))
-c2.metric("biggest move", top.get("delta", "?"), help=short_tag(top.get("tag", "?")))
+c2.metric("biggest move", top.get("delta", "?"), help=row_label(top))
 c3.metric("action", action, help="committed thesis action for this print")
 
 table = [
     {
-        "line item": short_tag(r.get("tag", "?")),
+        "line item": row_label(r),
+        "XBRL tag": short_tag(r.get("tag", "?")),
         "prior": r.get("prior"),
         "current": r.get("current"),
         "delta": r.get("delta"),
@@ -105,14 +113,33 @@ table = [
 st.dataframe(table, use_container_width=True, hide_index=True)
 
 st.info(
-    f"**biggest move:** {short_tag(top.get('tag', '?'))} "
+    f"**biggest move:** {row_label(top)} "
     f"{top.get('prior')} -> {top.get('current')} "
     f"({top.get('delta')}, {top.get('percent_delta')}). "
     f"pillar(s): {pillars}. action on {ticker} {quarter}: **{action}**."
 )
 
+for r in ranked:
+    if not is_lease_commitment(str(r.get("tag", "")), r.get("axis")):
+        continue
+    st.caption(
+        f"{row_label(r)}: {r.get('tag')} on {r.get('axis')} is a lease commitment, "
+        f"not a purchase obligation. members summed: prior "
+        f"{' + '.join(r.get('prior_members') or []) or 'none'}; current "
+        f"{' + '.join(r.get('current_members') or []) or 'none'}."
+    )
+    first = r.get("as_first_reported")
+    if isinstance(first, dict):
+        st.caption(
+            f"corrected {r.get('corrected', '?')}: first reported as {first.get('prior')} "
+            f"-> {first.get('current')} ({first.get('delta')}, {first.get('percent_delta')}), "
+            f"{first.get('basis', 'a different basis')}."
+        )
+
 if header.get("revert_threshold"):
     st.caption(f"revert threshold: {header['revert_threshold']}")
+for note in header.get("corrections") or []:
+    st.caption(f"correction: {note}")
 
 # -------------------------------------------------------------------------
 # interactive: drive the real diff engine on your own line items
