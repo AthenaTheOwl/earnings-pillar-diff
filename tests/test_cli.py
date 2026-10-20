@@ -59,6 +59,8 @@ def test_show_labels_interim_report_as_10q_vs_prior_quarter(tmp_path, capsys) ->
     )
     assert main(["show", "--report", str(report)]) == 0
     out = capsys.readouterr().out
+    # the basis is inferred from the quarter string; the report does not record
+    # what the prior side was, so this pins the label, not a checked fact
     assert "MSFT 2026Q1 10-Q line-item deltas" in out
     assert "1 delta(s) vs prior quarter" in out
 

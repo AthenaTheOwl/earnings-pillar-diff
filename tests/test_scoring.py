@@ -37,7 +37,8 @@ def test_filing_form_and_comparison_basis_follow_fiscal_quarter() -> None:
     # fiscal Q4 is the annual 10-K, measured against the prior fiscal year.
     assert filing_form("2025Q4") == "10-K"
     assert comparison_basis("10-K") == "prior fiscal year"
-    # interim quarters are 10-Qs, measured against the prior quarter.
+    # interim quarters are 10-Qs, labelled against the prior quarter (an
+    # inferred label; see comparison_basis).
     assert filing_form("2026Q1") == "10-Q"
     assert comparison_basis("10-Q") == "prior quarter"
 

@@ -58,7 +58,13 @@ def fiscal_period_end(quarter: str, fiscal_year_end: str) -> dt.date:
 
 
 def comparison_basis(form: str) -> str:
-    """The comparable period a delta from this form is measured against."""
+    """The comparison basis `show` labels a report with, inferred from the form.
+
+    This is a label, not a check: report rows do not record what the prior
+    side of the diff was (`diff` compares whatever --prior-file it is given),
+    and a 10-Q's own comparatives are often year-to-date or same-quarter
+    prior-year rather than the prior quarter.
+    """
     return "prior fiscal year" if form == "10-K" else "prior quarter"
 
 
