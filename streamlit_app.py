@@ -1,9 +1,9 @@
 """earnings-pillar-diff - live demo (Streamlit Community Cloud).
 
-Reads the committed report under reports/*.jsonl and shows the quarter-over-
-quarter 10-Q line-item deltas for a hyperscaler print, ranked by absolute
-change, with the affected thesis pillar and the committed action. No network,
-no secrets - runs entirely off the committed fixture report.
+Reads the committed report under reports/*.jsonl and shows the filing
+line-item deltas against the comparable prior period for a hyperscaler print,
+ranked by absolute change, with the affected thesis pillar and the committed
+action. No network, no secrets - runs entirely off the committed fixture report.
 
 Deploy: Streamlit Community Cloud -> New app -> repo AthenaTheOwl/earnings-pillar-diff,
 branch main, main file streamlit_app.py.
@@ -15,6 +15,8 @@ import re
 from pathlib import Path
 
 import streamlit as st
+
+from earnings_pillar_diff.scoring import comparison_basis, filing_form
 
 REPO = Path(__file__).resolve().parent
 REPORTS = REPO / "reports"
@@ -52,11 +54,12 @@ def load_report(path: Path) -> tuple[dict, list[dict]]:
     return header, deltas
 
 
-st.set_page_config(page_title="earnings-pillar-diff - 10-Q delta memo", layout="wide")
+st.set_page_config(page_title="earnings-pillar-diff - filing delta memo", layout="wide")
 st.title("earnings-pillar-diff")
 st.caption(
-    "quarter-over-quarter 10-Q capex and purchase-obligation deltas for a "
-    "hyperscaler print, mapped onto a named thesis pillar with a committed action."
+    "filing capex and purchase-obligation deltas against the comparable prior "
+    "period for a hyperscaler print, mapped onto a named thesis pillar with a "
+    "committed action."
 )
 
 files = sorted(REPORTS.glob("*.jsonl"))
@@ -76,8 +79,9 @@ ticker = header.get("ticker", choice.split("-")[0])
 quarter = header.get("quarter", "?")
 action = header.get("action", "?")
 pillars = ", ".join(header.get("pillars_affected", [])) or "none"
+form = filing_form(str(quarter))
 
-st.subheader(f"{ticker} {quarter} - line-item deltas vs prior quarter")
+st.subheader(f"{ticker} {quarter} {form} - line-item deltas vs {comparison_basis(form)}")
 
 ranked = sorted(deltas, key=lambda d: abs(parse_usd(d.get("delta"))), reverse=True)
 top = ranked[0]
@@ -119,7 +123,7 @@ st.divider()
 st.subheader("diff it yourself")
 st.caption(
     "the section above is a committed report. below, you drive the repo's real "
-    "engine: edit prior-quarter and current-quarter line-item values and "
+    "engine: edit prior-period and current-period line-item values and "
     "`earnings_pillar_diff.model.build_delta_rows` recomputes every delta, "
     "percent change, and materiality flag live — the same code the `diff` CLI "
     "verb runs. materiality uses `scoring.material_delta` (delta >= "
